@@ -47,3 +47,14 @@ class ChatCompletionResponse(BaseModel):
     model: str
     choices: list[ChatChoice]
     usage: ChatUsage
+
+
+class CreateQuotaRequest(BaseModel):
+    api_key_id: uuid.UUID
+    quota_type: str
+    limit_value: int
+    model: str | None = None
+
+
+class CreateQuotaResponse(BaseModel):
+    quota_id: uuid.UUID
