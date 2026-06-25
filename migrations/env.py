@@ -1,4 +1,5 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -11,6 +12,11 @@ from llmcontroller.db import models  # noqa: F401  (ensures models are imported)
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Prefer the runtime DATABASE_URL (e.g. inside Docker) over alembic.ini.
+_db_url = os.environ.get("DATABASE_URL")
+if _db_url:
+    config.set_main_option("sqlalchemy.url", _db_url)
 
 target_metadata = Base.metadata
 
