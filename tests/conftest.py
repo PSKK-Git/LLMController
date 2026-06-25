@@ -39,3 +39,14 @@ async def client(db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def redis_client():
+    import redis.asyncio as aioredis
+
+    client = aioredis.from_url("redis://localhost:6379/15", decode_responses=True)
+    await client.flushdb()
+    yield client
+    await client.flushdb()
+    await client.aclose()
