@@ -74,3 +74,28 @@ class LLMRequest(Base):
     masked_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     request_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Quota(Base):
+    __tablename__ = "quotas"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("api_keys.id"), nullable=True, index=True
+    )
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    quota_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    limit_value: Mapped[int] = mapped_column(Integer, nullable=False)
+    reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
