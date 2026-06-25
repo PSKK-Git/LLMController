@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LLMController</title>
+<style>
+  :root { --bg:#0f1115; --panel:#1a1d24; --border:#2a2f3a; --text:#e6e8ec; --muted:#8b92a1; --accent:#5b8cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 96px; }
+  h1 { font-size:20px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 20px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+  input, select, textarea { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:14px; }
+  textarea { resize:vertical; min-height:70px; }
+  .row { display:flex; gap:12px; }
+  .row > * { flex:1; }
+  button { background:var(--accent); color:white; border:0; border-radius:8px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .msgs { display:flex; flex-direction:column; gap:10px; }
+  .msg { padding:10px 12px; border-radius:10px; font-size:14px; white-space:pre-wrap; line-height:1.45; }
+  .user { background:#222838; align-self:flex-end; max-width:85%; }
+  .assistant { background:#161b27; border:1px solid var(--border); align-self:flex-start; max-width:85%; }
+  .meta { font-size:11px; color:var(--muted); margin-top:4px; }
+  .err { color:#ff6b6b; font-size:13px; }
+  details summary { cursor:pointer; color:var(--muted); font-size:13px; }
+  .mini { font-size:12px; margin-top:8px; }
+  code { background:#0f1115; padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>LLMController</h1>
+  <p class="sub">LLM gateway &middot; cost-tracked chat completions</p>
+
+  <div class="card">
+    <label>API key</label>
+    <input id="key" type="password" placeholder="sk-..." autocomplete="off" />
+    <details class="mini">
+      <summary>Don't have a key? Generate one (admin)</summary>
+      <div style="margin-top:10px">
+        <div class="row">
+          <input id="adminToken" type="password" placeholder="admin token" autocomplete="off" />
+          <input id="orgName" type="text" placeholder="org name (e.g. demo)" />
+        </div>
+        <button id="genBtn" style="margin-top:8px">Generate key</button>
+        <div id="genOut" class="mini"></div>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div style="flex:2">
+        <label>Model</label>
+        <select id="model">
+          <option value="claude-3-haiku">claude-3-haiku (cheapest)</option>
+          <option value="claude-3-sonnet" selected>claude-3-sonnet</option>
+          <option value="claude-3-opus">claude-3-opus</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <label>Message</label>
+      <textarea id="prompt" placeholder="Ask something..."></textarea>
+    </div>
+    <button id="sendBtn" style="margin-top:12px">Send</button>
+    <div id="err" class="err" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <div class="msgs" id="msgs"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function addMsg(role, text, meta) {
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.textContent = text;
+  if (meta) {
+    const m = document.createElement("div");
+    m.className = "meta";
+    m.textContent = meta;
+    div.appendChild(m);
+  }
+  $("msgs").appendChild(div);
+  div.scrollIntoView({ behavior: "smooth" });
+}
+
+async function send() {
+  const key = $("key").value.trim();
+  const model = $("model").value;
+  const prompt = $("prompt").value.trim();
+  $("err").textContent = "";
+  if (!key) { $("err").textContent = "Enter an API key."; return; }
+  if (!prompt) { return; }
+
+  addMsg("user", prompt);
+  $("prompt").value = "";
+  $("sendBtn").disabled = true;
+
+  try {
+    const resp = await fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!resp.ok) {
+      const detail = await resp.json().catch(() => ({}));
+      $("err").textContent = "Error " + resp.status + ": " + (detail.detail || resp.statusText);
+      return;
+    }
+    const data = await resp.json();
+    const cost = resp.headers.get("X-Cost-This-Request");
+    const usage = data.usage || {};
+    const meta = "model: " + data.model + "  |  tokens: " + (usage.total_tokens ?? "?") +
+                 (cost ? "  |  cost: $" + cost : "");
+    addMsg("assistant", data.choices[0].message.content, meta);
+  } catch (e) {
+    $("err").textContent = "Request failed: " + e.message;
+  } finally {
+    $("sendBtn").disabled = false;
+  }
+}
+
+async function genKey() {
+  const adminToken = $("adminToken").value.trim();
+  const orgName = $("orgName").value.trim() || "demo";
+  $("genOut").textContent = "";
+  if (!adminToken) { $("genOut").textContent = "Enter the admin token."; return; }
+  try {
+    const h = { "X-Admin-Token": adminToken, "Content-Type": "application/json" };
+    const orgResp = await fetch("/admin/organizations", { method: "POST", headers: h, body: JSON.stringify({ name: orgName }) });
+    if (!orgResp.ok) { $("genOut").textContent = "Org create failed: " + orgResp.status; return; }
+    const org = await orgResp.json();
+    const keyResp = await fetch("/admin/api-keys", { method: "POST", headers: h, body: JSON.stringify({ org_id: org.org_id, name: "ui" }) });
+    if (!keyResp.ok) { $("genOut").textContent = "Key create failed: " + keyResp.status; return; }
+    const k = await keyResp.json();
+    $("key").value = k.api_key;
+    $("genOut").innerHTML = "Key created and filled in above. <strong>Copy it now</strong> &mdash; shown once.";
+  } catch (e) {
+    $("genOut").textContent = "Failed: " + e.message;
+  }
+}
+
+$("sendBtn").addEventListener("click", send);
+$("genBtn").addEventListener("click", genKey);
+$("prompt").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); });
+</script>
+</body>
+</html>
