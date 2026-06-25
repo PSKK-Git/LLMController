@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://llm:llm@localhost:5432/llmcontroller"
     redis_url: str = "redis://localhost:6379/0"
     anthropic_api_key: str = ""
+    openai_api_key: str = ""
     admin_token: str = "dev-admin-token-change-me"
 
 
