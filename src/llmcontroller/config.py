@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    openai_base_url: str = ""  # set to an OpenAI-compatible proxy/gateway base URL
     admin_token: str = "dev-admin-token-change-me"
 
 

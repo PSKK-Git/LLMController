@@ -2,12 +2,19 @@ from openai import AsyncOpenAI
 
 from llmcontroller.providers.base import LLMProvider, LLMRequest, LLMResponse
 
+# Native OpenAI models.
 OPENAI_MODELS: set[str] = {"gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"}
+
+# Models served via an OpenAI-compatible proxy/gateway (used when a custom
+# base_url is configured). One key fronts multiple upstream providers.
+GATEWAY_MODELS: set[str] = {"claude-opus-4-7", "gemini-2.5-flash"}
+
+ALL_OPENAI_COMPATIBLE: set[str] = OPENAI_MODELS | GATEWAY_MODELS
 
 
 class OpenAIProvider(LLMProvider):
-    def __init__(self, api_key: str):
-        self.client = AsyncOpenAI(api_key=api_key)
+    def __init__(self, api_key: str, base_url: str | None = None):
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url or None)
 
     async def chat(self, request: LLMRequest) -> LLMResponse:
         resp = await self.client.chat.completions.create(
@@ -21,11 +28,11 @@ class OpenAIProvider(LLMProvider):
         return LLMResponse(
             content=choice.message.content or "",
             model=request.model,
-            input_tokens=usage.prompt_tokens,
-            output_tokens=usage.completion_tokens,
-            total_tokens=usage.total_tokens,
+            input_tokens=usage.prompt_tokens if usage else 0,
+            output_tokens=usage.completion_tokens if usage else 0,
+            total_tokens=usage.total_tokens if usage else 0,
             stop_reason=choice.finish_reason or "stop",
         )
 
     async def list_models(self) -> list[str]:
-        return sorted(OPENAI_MODELS)
+        return sorted(ALL_OPENAI_COMPATIBLE)
