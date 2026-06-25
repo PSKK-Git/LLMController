@@ -1,0 +1,10 @@
+region            = "eu-frankfurt-1"
+compartment_ocid  = "ocid1.tenancy.oc1..xxxxx"
+ssh_public_key    = "ssh-ed25519 AAAA... you@host"
+anthropic_api_key = "sk-ant-xxxx"
+admin_token       = "pick-a-strong-token"
+
+# Optional overrides:
+# instance_shape      = "VM.Standard.A1.Flex"
+# instance_ocpus      = 2
+# instance_memory_gbs = 12

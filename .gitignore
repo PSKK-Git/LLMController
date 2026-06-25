@@ -4,3 +4,11 @@ __pycache__/
 .env
 .pytest_cache/
 .coverage
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform.lock.hcl
+*.tfvars
+!terraform/terraform.tfvars.example
