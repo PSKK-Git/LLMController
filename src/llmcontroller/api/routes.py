@@ -18,6 +18,7 @@ from llmcontroller.cost.calculator import calculate_cost
 from llmcontroller.db.database import get_db
 from llmcontroller.db.models import ApiKey, Quota
 from llmcontroller.logging.audit import record_request
+from llmcontroller.observability import metrics
 from llmcontroller.providers.base import LLMRequest
 from llmcontroller.providers.factory import get_provider, provider_name_for_model
 from llmcontroller.quota.engine import RedisQuotaEngine
@@ -51,17 +52,19 @@ async def chat_completions(
             if q.quota_type == "requests_per_minute":
                 allowed, remaining = await engine.consume(key_id, q.quota_type, q.limit_value, 1)
                 if not allowed:
+                    metrics.quota_rejections_total.labels("requests_per_minute").inc()
+                    metrics.requests_total.labels(body.model, provider_name, "429").inc()
                     raise HTTPException(
-                        status_code=429,
-                        detail="Rate limit exceeded",
+                        status_code=429, detail="Rate limit exceeded",
                         headers={"Retry-After": "60"},
                     )
                 response.headers["X-RateLimit-Remaining"] = str(remaining)
             elif q.quota_type == "tokens_per_day":
                 if await engine.current(key_id, q.quota_type) >= q.limit_value:
+                    metrics.quota_rejections_total.labels("tokens_per_day").inc()
+                    metrics.requests_total.labels(body.model, provider_name, "429").inc()
                     raise HTTPException(
-                        status_code=429,
-                        detail="Daily token quota exceeded",
+                        status_code=429, detail="Daily token quota exceeded",
                         headers={"Retry-After": "3600"},
                     )
 
@@ -79,6 +82,8 @@ async def chat_completions(
             result = await provider.chat(llm_request)
         except Exception as exc:
             latency_ms = int((time.perf_counter() - start) * 1000)
+            metrics.requests_total.labels(body.model, provider_name, "502").inc()
+            metrics.request_duration.labels(body.model, provider_name).observe(latency_ms / 1000)
             background_tasks.add_task(
                 record_request,
                 api_key_id=api_key.id, org_id=api_key.org_id, model=body.model,
@@ -91,10 +96,16 @@ async def chat_completions(
         latency_ms = int((time.perf_counter() - start) * 1000)
         cost = calculate_cost(body.model, result.input_tokens, result.output_tokens)
 
-        # --- post-call: consume token quota by actual usage ---
         for q in quotas:
             if q.quota_type == "tokens_per_day":
                 await engine.consume(key_id, q.quota_type, q.limit_value, result.total_tokens)
+
+        # --- metrics ---
+        metrics.requests_total.labels(body.model, provider_name, "200").inc()
+        metrics.tokens_total.labels(body.model, "input").inc(result.input_tokens)
+        metrics.tokens_total.labels(body.model, "output").inc(result.output_tokens)
+        metrics.cost_total.labels(body.model).inc(cost)
+        metrics.request_duration.labels(body.model, provider_name).observe(latency_ms / 1000)
 
         background_tasks.add_task(
             record_request,
