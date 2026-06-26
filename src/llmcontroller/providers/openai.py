@@ -5,9 +5,13 @@ from llmcontroller.providers.base import LLMProvider, LLMRequest, LLMResponse
 # Native OpenAI models.
 OPENAI_MODELS: set[str] = {"gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"}
 
-# Models served via an OpenAI-compatible proxy/gateway (used when a custom
-# base_url is configured). One key fronts multiple upstream providers.
-GATEWAY_MODELS: set[str] = {"claude-opus-4-7", "gemini-2.5-flash"}
+# Models reachable via an OpenAI-compatible base_url (Mistral, proxies, etc.).
+GATEWAY_MODELS: set[str] = {
+    "mistral-small-latest",
+    "mistral-large-latest",
+    "claude-opus-4-7",
+    "gemini-2.5-flash",
+}
 
 ALL_OPENAI_COMPATIBLE: set[str] = OPENAI_MODELS | GATEWAY_MODELS
 
